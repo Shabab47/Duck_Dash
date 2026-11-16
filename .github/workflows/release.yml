@@ -113,19 +113,27 @@ jobs:
               $ICON_FLAG
 
       # -------------------------
-      # Rename installer for clarity
+      # Rename installer and package release zip (includes INSTALL.md)
       # -------------------------
-      - name: Rename installer
+      - name: Package release files
         shell: bash
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          mkdir -p target/release
+          mkdir -p target/release/stage target/release/out
+          cp INSTALL.md target/release/stage/INSTALL.md
+
           if [ "${{ matrix.label }}" = "windows" ]; then
             SRC=$(ls target/*.exe | head -n 1)
-            cp "$SRC" "target/release/DuckDash-${VERSION}-windows-installer.exe"
+            cp "$SRC" "target/release/stage/DuckDash-${VERSION}-windows-installer.exe"
+            if command -v 7z >/dev/null 2>&1; then
+              7z a -tzip "target/release/out/DuckDash-${VERSION}-windows.zip" ./target/release/stage/*
+            else
+              powershell -NoProfile -Command "Compress-Archive -Path 'target/release/stage/*' -DestinationPath 'target/release/out/DuckDash-${VERSION}-windows.zip' -Force"
+            fi
           else
             SRC=$(ls target/*.deb | head -n 1)
-            cp "$SRC" "target/release/DuckDash-${VERSION}-linux-amd64.deb"
+            cp "$SRC" "target/release/stage/DuckDash-${VERSION}-linux-amd64.deb"
+            (cd target/release/stage && zip -r "../out/DuckDash-${VERSION}-linux.zip" .)
           fi
 
       # -------------------------
@@ -135,7 +143,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: DuckDash-${{ matrix.label }}
-          path: target/release/*
+          path: target/release/out/*
 
   # -------------------------
   # Release job
@@ -154,6 +162,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            DuckDash-linux/DuckDash-*-linux-amd64.deb
-            DuckDash-windows/DuckDash-*-windows-installer.exe
+            DuckDash-linux/DuckDash-*-linux.zip
+            DuckDash-windows/DuckDash-*-windows.zip
           generate_release_notes: true
