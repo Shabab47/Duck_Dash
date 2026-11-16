@@ -113,13 +113,29 @@ jobs:
               $ICON_FLAG
 
       # -------------------------
+      # Rename installer for clarity
+      # -------------------------
+      - name: Rename installer
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          mkdir -p target/release
+          if [ "${{ matrix.label }}" = "windows" ]; then
+            SRC=$(ls target/*.exe | head -n 1)
+            cp "$SRC" "target/release/DuckDash-${VERSION}-windows-installer.exe"
+          else
+            SRC=$(ls target/*.deb | head -n 1)
+            cp "$SRC" "target/release/DuckDash-${VERSION}-linux-amd64.deb"
+          fi
+
+      # -------------------------
       # Upload artifact
       # -------------------------
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: DuckDash-${{ matrix.label }}
-          path: target/${{ matrix.artifact }}
+          path: target/release/*
 
   # -------------------------
   # Release job
@@ -138,6 +154,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            DuckDash-linux/*.deb
-            DuckDash-windows/*.exe
+            DuckDash-linux/DuckDash-*-linux-amd64.deb
+            DuckDash-windows/DuckDash-*-windows-installer.exe
           generate_release_notes: true
