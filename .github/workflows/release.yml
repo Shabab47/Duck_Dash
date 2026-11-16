@@ -96,8 +96,10 @@ jobs:
             
             if [ "${{ matrix.label }}" = "windows" ]; then
               ICON_FLAG="--icon src/packaging/windows/DuckDash.ico"
+              PLATFORM_FLAGS="--win-dir-chooser --win-shortcut --win-menu"
             else
               ICON_FLAG=""
+              PLATFORM_FLAGS="--linux-shortcut"
             fi
             
             jpackage \
@@ -110,7 +112,8 @@ jobs:
               --runtime-image target/runtime \
               --dest target \
               --resource-dir src/packaging/${{ matrix.label }} \
-              $ICON_FLAG
+              $ICON_FLAG \
+              $PLATFORM_FLAGS
 
       # -------------------------
       # Rename installer and package release zip (includes INSTALL.md)

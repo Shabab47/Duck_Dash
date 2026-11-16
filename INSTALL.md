@@ -2,30 +2,37 @@
 
 ## Option 1: Install from a release (recommended for players)
 
-### Windows (`.exe` installer)
-1. Go to the project **Releases** page: https://github.com/Shabab47/Duck_Dash/releases
-2. Open the latest release and download the Windows installer asset:
-   - `DuckDash-<version>-windows-installer.exe` (newer releases)
-   - or the `.exe` file attached to the release
-3. Run the downloaded `.exe` file.
+Download the release `.zip` for your platform from the **Releases** page: https://github.com/Shabab47/Duck_Dash/releases
+
+Each release zip includes the installer and this `INSTALL.md` file.
+
+### Windows (`.zip` containing `.exe` installer)
+1. Download **`DuckDash-<version>-windows.zip`** from the latest release.
+2. Extract the zip to a folder (e.g. `Downloads` or `Desktop`).
+3. Run **`DuckDash-<version>-windows-installer.exe`**.
    - If Windows SmartScreen appears, click **More info** → **Run anyway** (only if you trust the source).
    - If needed, right-click the installer → **Run as administrator**.
-4. Follow the installer steps to complete installation.
-5. Launch **Duck Dash** from the Start Menu / desktop shortcut (or from the install folder).
+4. In the installer, you can **browse and choose where to install** Duck Dash.
+5. Complete the installation.
+   - A **desktop shortcut** will be created (and a Start Menu entry, when available).
+6. **Run the game from:**
+   - The **Duck Dash desktop shortcut**, or
+   - The **Start Menu** entry, or
+   - The install folder you selected (run `DuckDash.exe` inside that folder).
 
-### Linux (`.deb` package, Debian/Ubuntu-based)
-1. Go to the project **Releases** page: https://github.com/Shabab47/Duck_Dash/releases
-2. Download the Linux package asset:
-   - `DuckDash-<version>-linux-amd64.deb` (newer releases)
-   - or the `.deb` file attached to the release
-3. Install it using your package manager, for example:
+### Linux (`.zip` containing `.deb` package, Debian/Ubuntu-based)
+1. Download **`DuckDash-<version>-linux.zip`** from the latest release.
+2. Extract the zip to a folder.
+3. Install **`DuckDash-<version>-linux-amd64.deb`** using your package manager, for example:
    ```bash
    sudo apt install ./DuckDash-<version>-linux-amd64.deb
    ```
-   (Replace the filename with the file you downloaded.)
-4. Launch **Duck Dash** from your applications menu.
+   (Run the command from the extracted folder, or use the full path to the `.deb` file.)
+4. **Run the game from:**
+   - Your **applications menu** (a launcher/shortcut is installed), or
+   - The installed application entry for **DuckDash** provided by your desktop environment.
 
-> Note: Release asset names may vary slightly in older releases. Download the `.exe` for Windows or `.deb` for Linux from the release assets.
+> Note: Actual shortcut/menu behavior can depend on your OS and desktop environment settings. If a shortcut is not created automatically, launch Duck Dash from the install location/applications menu.
 
 ## Option 2: Run from source (developers)
 
