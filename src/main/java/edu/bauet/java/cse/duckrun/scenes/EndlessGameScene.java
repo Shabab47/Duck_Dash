@@ -104,7 +104,6 @@ public class EndlessGameScene {
     private final List<Integer> spawnHistory = new ArrayList<>();
 
     private long lastFrameTime = 0;
-    private double smoothedDelta = 1.0 / 60.0;
     private double timeScale = 1.0;
     // World speed while the duck is crouching (this also happens for 0.25s after eating).
     // 1.0 = no slowdown (smooth). Set to 0.75 to get the old "slow-mo crouch" back.
@@ -217,10 +216,8 @@ public class EndlessGameScene {
         bgTileWidth = bgImage.getWidth() * (MainApp.WINDOW_HEIGHT / bgImage.getHeight());
         bg1X = 0.0;
         bg2X = bgTileWidth;
-        long r1 = Math.round(bg1X);
-        long tileW = Math.round(bgTileWidth);
-        background1.setLayoutX(r1);
-        background2.setLayoutX(r1 + tileW);
+        background1.setLayoutX(bg1X);
+        background2.setLayoutX(bg2X);
     }
 
     private void createPlayer() {
@@ -368,13 +365,11 @@ public class EndlessGameScene {
             }
 
             private void handleFrame(long now) {
-                if (lastFrameTime == 0) { lastFrameTime = now; smoothedDelta = 1.0 / 60.0; return; }
-                double rawDelta = (now - lastFrameTime) / 1_000_000_000.0;
+                if (lastFrameTime == 0) { lastFrameTime = now; return; }
+                double deltaTime = (now - lastFrameTime) / 1_000_000_000.0;
                 lastFrameTime = now;
                 // Prevent extreme hitch jumps without slowing normal gameplay
-                rawDelta = Math.min(rawDelta, 1.0 / 30.0);
-                smoothedDelta += (rawDelta - smoothedDelta) * 0.2; // smooth frame pacing (reduces visible speed jumps)
-                double deltaTime = smoothedDelta;
+                deltaTime = Math.min(deltaTime, 1.0 / 30.0);
 
                 if (!isPaused) {
                     duck.setSleepy(!sleepBar.isEmpty());
@@ -457,17 +452,8 @@ public class EndlessGameScene {
             bg1X = bg2X + bgTileWidth;
         }
 
-        long r1 = Math.round(bg1X);
-        long tileW = Math.round(bgTileWidth);
-        // Keep a stable on-screen gap between tiles to avoid 1px periodic jumps
-        if (bg1X < bg2X) {
-            background1.setLayoutX(r1);
-            background2.setLayoutX(r1 + tileW);
-        } else {
-            long r2 = Math.round(bg2X);
-            background2.setLayoutX(r2);
-            background1.setLayoutX(r2 + tileW);
-        }
+        background1.setLayoutX(bg1X);
+        background2.setLayoutX(bg2X);
     }
 
     private void spawnEntities(long now) {
@@ -605,7 +591,6 @@ public class EndlessGameScene {
         if (!isPaused) return;
         isPaused = false;
         lastFrameTime = 0;
-        smoothedDelta = 1.0 / 60.0;
         edu.bauet.java.cse.duckrun.utils.FrameProfiler.reset();
         MediaPlayer bgm = MusicManager.getInstance().getBgPlayer();
         if (bgm != null && MusicManager.getInstance().isMusicEnabled()) bgm.play();
@@ -620,10 +605,8 @@ public class EndlessGameScene {
         bgScrollAccumulator = 0.0;
         bg1X = 0.0;
         bg2X = bgTileWidth;
-        long r1 = Math.round(bg1X);
-        long tileW = Math.round(bgTileWidth);
-        background1.setLayoutX(r1);
-        background2.setLayoutX(r1 + tileW);
+        background1.setLayoutX(bg1X);
+        background2.setLayoutX(bg2X);
 
         for (Enemy e : enemies) root.getChildren().remove(e.getNode());
         enemies.clear();
