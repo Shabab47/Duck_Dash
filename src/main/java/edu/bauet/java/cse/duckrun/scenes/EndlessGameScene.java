@@ -104,6 +104,8 @@ public class EndlessGameScene {
     private final List<Integer> spawnHistory = new ArrayList<>();
 
     private long lastFrameTime = 0;
+    private double accumulator = 0.0;
+    private static final double FIXED_DT = 1.0 / 60.0;
     private double timeScale = 1.0;
     // World speed while the duck is crouching (this also happens for 0.25s after eating).
     // 1.0 = no slowdown (smooth). Set to 0.75 to get the old "slow-mo crouch" back.
@@ -365,31 +367,37 @@ public class EndlessGameScene {
             }
 
             private void handleFrame(long now) {
-                if (lastFrameTime == 0) { lastFrameTime = now; return; }
-                double deltaTime = (now - lastFrameTime) / 1_000_000_000.0;
+                if (lastFrameTime == 0) { lastFrameTime = now; accumulator = 0.0; return; }
+                double frameDelta = (now - lastFrameTime) / 1_000_000_000.0;
                 lastFrameTime = now;
                 // Prevent extreme hitch jumps without slowing normal gameplay
-                deltaTime = Math.min(deltaTime, 1.0 / 30.0);
+                frameDelta = Math.min(frameDelta, 0.1);
+                accumulator += frameDelta;
 
                 if (!isPaused) {
                     duck.setSleepy(!sleepBar.isEmpty());
-                    // Smoothly blend world speed when crouching instead of snapping (avoids sudden speed jump)
-                    double targetScale = duck.isCrouching() ? CROUCH_WORLD_SCALE : 1.0;
-                    timeScale += (targetScale - timeScale) * Math.min(1.0, deltaTime / 0.15);
-                    double effectiveDelta = deltaTime * timeScale;
-                    updateBackground(effectiveDelta);
-                    duck.update(deltaTime);
-                    spawnEntities(now);
-                    updateEnemies(effectiveDelta);
-                    updateFoods(effectiveDelta);
-                    updateObstacles(effectiveDelta);
-                    updateCountdown(deltaTime);      // real time — timer should not slow down
-                    updateEscalation(deltaTime);     // real time — escalation should not slow down
+                    // Run simulation in fixed steps to avoid visible speed jumps on uneven frame pacing
+                    while (accumulator >= FIXED_DT) {
+                        accumulator -= FIXED_DT;
 
+                        double targetScale = duck.isCrouching() ? CROUCH_WORLD_SCALE : 1.0;
+                        timeScale += (targetScale - timeScale) * Math.min(1.0, FIXED_DT / 0.15);
+                        double effectiveDelta = FIXED_DT * timeScale;
 
-                    if (sleepBar.isFull()) {
-                        deathCause = DeathCause.SLEEP;
-                        gameOver();
+                        updateBackground(effectiveDelta);
+                        duck.update(FIXED_DT);
+                        spawnEntities(now);
+                        updateEnemies(effectiveDelta);
+                        updateFoods(effectiveDelta);
+                        updateObstacles(effectiveDelta);
+                        updateCountdown(FIXED_DT);      // advance in fixed steps for consistency
+                        updateEscalation(FIXED_DT);     // advance in fixed steps for consistency
+
+                        if (sleepBar.isFull()) {
+                            deathCause = DeathCause.SLEEP;
+                            gameOver();
+                            break;
+                        }
                     }
                 }
             }
@@ -591,6 +599,7 @@ public class EndlessGameScene {
         if (!isPaused) return;
         isPaused = false;
         lastFrameTime = 0;
+        accumulator = 0.0;
         edu.bauet.java.cse.duckrun.utils.FrameProfiler.reset();
         MediaPlayer bgm = MusicManager.getInstance().getBgPlayer();
         if (bgm != null && MusicManager.getInstance().isMusicEnabled()) bgm.play();

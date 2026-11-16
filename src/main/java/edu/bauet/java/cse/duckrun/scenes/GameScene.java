@@ -102,6 +102,8 @@ public class GameScene {
 
     private long lastFrameTime = 0;
     private double timeScale = 1.0;
+    private double accumulator = 0.0;
+    private static final double FIXED_DT = 1.0 / 60.0;
     // World speed while the duck is crouching (this also happens for 0.25s after eating).
     // 1.0 = no slowdown (smooth). Set to 0.75 to get the old "slow-mo crouch" back.
     private static final double CROUCH_WORLD_SCALE = 1.0;
@@ -702,17 +704,19 @@ public class GameScene {
             private void handleFrame(long now) {
                 if (lastFrameTime == 0) {
                     lastFrameTime = now;
+                    accumulator = 0.0;
                     return;
                 }
 
-                double deltaTime = (now - lastFrameTime) / 1_000_000_000.0;
+                double frameDelta = (now - lastFrameTime) / 1_000_000_000.0;
                 lastFrameTime = now;
                 // Prevent extreme hitch jumps without slowing normal gameplay
-                deltaTime = Math.min(deltaTime, 1.0 / 30.0);
+                frameDelta = Math.min(frameDelta, 0.1);
+                accumulator += frameDelta;
 
                 if (!isPaused) {
                     if (duckRunningOff) {
-                        duck.update(deltaTime);
+                        duck.update(frameDelta);
                         drawProgressBar();
                         if (duck.hasRunOff(MainApp.WINDOW_WIDTH)) {
                             duckRunningOff = false;
@@ -722,25 +726,31 @@ public class GameScene {
                     }
 
                     duck.setSleepy(!sleepBar.isEmpty());
-                    // Smoothly blend world speed when crouching instead of snapping (avoids sudden speed jump)
-                    double targetScale = duck.isCrouching() ? CROUCH_WORLD_SCALE : 1.0;
-                    timeScale += (targetScale - timeScale) * Math.min(1.0, deltaTime / 0.15);
-                    double effectiveDelta = deltaTime * timeScale;
-                    updateBackground(effectiveDelta);
-                    duck.update(deltaTime);
-                    if (!levelCompleted) spawnEntities(now);
-                    updateEnemies(effectiveDelta);
-                    updateFoods(effectiveDelta);
-                    updateObstacles(effectiveDelta);
+                    // Run simulation in fixed steps to avoid visible speed jumps on uneven frame pacing
+                    while (accumulator >= FIXED_DT) {
+                        accumulator -= FIXED_DT;
+
+                        double targetScale = duck.isCrouching() ? CROUCH_WORLD_SCALE : 1.0;
+                        timeScale += (targetScale - timeScale) * Math.min(1.0, FIXED_DT / 0.15);
+                        double effectiveDelta = FIXED_DT * timeScale;
+
+                        updateBackground(effectiveDelta);
+                        duck.update(FIXED_DT);
+                        if (!levelCompleted) spawnEntities(now);
+                        updateEnemies(effectiveDelta);
+                        updateFoods(effectiveDelta);
+                        updateObstacles(effectiveDelta);
+
+                        if (sleepBar.isFull()) {
+                            deathCause = DeathCause.SLEEP;
+                            gameOver();
+                            break;
+                        }
+                    }
 
                     // ── Redraw progress bar every frame ──────────────────────
                     drawProgressBar();
                     // ─────────────────────────────────────────────────────────
-
-                    if (sleepBar.isFull()) {
-                        deathCause = DeathCause.SLEEP;
-                        gameOver();
-                    }
                 }
             }
         };
@@ -766,6 +776,7 @@ public class GameScene {
         if (!isPaused) return;
         isPaused = false;
         lastFrameTime = 0;
+        accumulator = 0.0;
         edu.bauet.java.cse.duckrun.utils.FrameProfiler.reset();
         timeUtil.start();
         MediaPlayer bgm = MusicManager.getInstance().getBgPlayer();
