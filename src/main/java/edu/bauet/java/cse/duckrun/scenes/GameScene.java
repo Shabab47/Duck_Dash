@@ -65,6 +65,8 @@ public class GameScene {
     private double bgScrollAccumulator = 0.0;
     private double bg1X = 0.0;
     private double bg2X = 0.0;
+    private double prevBg1X = 0.0;
+    private double prevBg2X = 0.0;
 
     private boolean isPaused = false;
     private Button pauseButton;
@@ -298,6 +300,8 @@ public class GameScene {
         bgTileWidth = bgImage.getWidth() * (MainApp.WINDOW_HEIGHT / bgImage.getHeight());
         bg1X = 0;
         bg2X = bgTileWidth;
+        prevBg1X = bg1X;
+        prevBg2X = bg2X;
 
         background1.setLayoutX(bg1X);
         background2.setLayoutX(bg2X);
@@ -316,6 +320,10 @@ public class GameScene {
 
     private void updateBackground(double deltaTime) {
         double moveAmount = backgroundScrollSpeed * deltaTime;
+
+        // Keep previous positions for render interpolation
+        prevBg1X = bg1X;
+        prevBg2X = bg2X;
 
         bg1X -= moveAmount;
         bg2X -= moveAmount;
@@ -339,8 +347,9 @@ public class GameScene {
             bg1X = bg2X + bgTileWidth;
         }
 
-        background1.setLayoutX(bg1X);
-        background2.setLayoutX(bg2X);
+        // Snap previous positions when a wrap occurred to avoid interpolating across a large jump
+        if (Math.abs(bg1X - prevBg1X) > bgTileWidth) prevBg1X = bg1X;
+        if (Math.abs(bg2X - prevBg2X) > bgTileWidth) prevBg2X = bg2X;
 
         // ── Accumulate scroll distance for the progress bar ──────────────────
         if (!duckRunningOff) {
@@ -360,6 +369,14 @@ public class GameScene {
                 duck.startRunOff();
             }
         }
+    }
+
+    private void renderBackgroundInterpolated() {
+        double alpha = Math.max(0.0, Math.min(1.0, accumulator / FIXED_DT));
+        double r1 = prevBg1X + (bg1X - prevBg1X) * alpha;
+        double r2 = prevBg2X + (bg2X - prevBg2X) * alpha;
+        background1.setLayoutX(r1);
+        background2.setLayoutX(r2);
     }
 
     private void onTileWrapped(ImageView tile) {
@@ -717,6 +734,8 @@ public class GameScene {
                 if (!isPaused) {
                     if (duckRunningOff) {
                         duck.update(frameDelta);
+                        background1.setLayoutX(bg1X);
+                        background2.setLayoutX(bg2X);
                         drawProgressBar();
                         if (duck.hasRunOff(MainApp.WINDOW_WIDTH)) {
                             duckRunningOff = false;
@@ -747,6 +766,8 @@ public class GameScene {
                             break;
                         }
                     }
+
+                    renderBackgroundInterpolated();
 
                     // ── Redraw progress bar every frame ──────────────────────
                     drawProgressBar();
@@ -792,6 +813,8 @@ public class GameScene {
         bgScrollAccumulator = 0.0;
         bg1X = 0.0;
         bg2X = bgTileWidth;
+        prevBg1X = bg1X;
+        prevBg2X = bg2X;
         background1.setLayoutX(bg1X);
         background2.setLayoutX(bg2X);
 

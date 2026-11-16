@@ -69,6 +69,8 @@ public class EndlessGameScene {
     private double bgScrollAccumulator = 0.0;
     private double bg1X = 0.0;
     private double bg2X = 0.0;
+    private double prevBg1X = 0.0;
+    private double prevBg2X = 0.0;
 
     private boolean isPaused = false;
     private Button pauseButton;
@@ -218,6 +220,8 @@ public class EndlessGameScene {
         bgTileWidth = bgImage.getWidth() * (MainApp.WINDOW_HEIGHT / bgImage.getHeight());
         bg1X = 0.0;
         bg2X = bgTileWidth;
+        prevBg1X = bg1X;
+        prevBg2X = bg2X;
         background1.setLayoutX(bg1X);
         background2.setLayoutX(bg2X);
     }
@@ -399,6 +403,8 @@ public class EndlessGameScene {
                             break;
                         }
                     }
+
+                    renderBackgroundInterpolated();
                 }
             }
         };
@@ -442,6 +448,9 @@ public class EndlessGameScene {
     private void updateBackground(double deltaTime) {
         double move = currentBgSpeed * deltaTime;
 
+        prevBg1X = bg1X;
+        prevBg2X = bg2X;
+
         bg1X -= move;
         bg2X -= move;
 
@@ -460,8 +469,17 @@ public class EndlessGameScene {
             bg1X = bg2X + bgTileWidth;
         }
 
-        background1.setLayoutX(bg1X);
-        background2.setLayoutX(bg2X);
+        // Snap previous positions when a wrap occurred to avoid interpolating across a large jump
+        if (Math.abs(bg1X - prevBg1X) > bgTileWidth) prevBg1X = bg1X;
+        if (Math.abs(bg2X - prevBg2X) > bgTileWidth) prevBg2X = bg2X;
+    }
+
+    private void renderBackgroundInterpolated() {
+        double alpha = Math.max(0.0, Math.min(1.0, accumulator / FIXED_DT));
+        double r1 = prevBg1X + (bg1X - prevBg1X) * alpha;
+        double r2 = prevBg2X + (bg2X - prevBg2X) * alpha;
+        background1.setLayoutX(r1);
+        background2.setLayoutX(r2);
     }
 
     private void spawnEntities(long now) {
@@ -614,6 +632,8 @@ public class EndlessGameScene {
         bgScrollAccumulator = 0.0;
         bg1X = 0.0;
         bg2X = bgTileWidth;
+        prevBg1X = bg1X;
+        prevBg2X = bg2X;
         background1.setLayoutX(bg1X);
         background2.setLayoutX(bg2X);
 

@@ -112,6 +112,8 @@ jobs:
               --runtime-image target/runtime \
               --dest target \
               --resource-dir src/packaging/${{ matrix.label }} \
+              --java-options "-Djavafx.animation.fullspeed=true" \
+              --java-options "-Dprism.vsync=false" \
               $ICON_FLAG \
               $PLATFORM_FLAGS
 
