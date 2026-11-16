@@ -61,6 +61,10 @@ public class GameScene {
     private ImageView background1;
     private ImageView background2;
     private javafx.scene.image.Image transitionImage;
+    private double bgTileWidth;
+    private double bgScrollAccumulator = 0.0;
+    private double bg1X = 0.0;
+    private double bg2X = 0.0;
 
     private boolean isPaused = false;
     private Button pauseButton;
@@ -82,6 +86,7 @@ public class GameScene {
     // ── Level Progress Bar ───────────────────────────────────────────────────
     private LevelProgressBar levelProgressBar;
     private Canvas progressCanvas;
+    private static final double PROGRESS_CANVAS_H = 100;
     private double levelScrolledPixels    = 0.0;
     private double levelTotalScrollPixels = 10000.0;
 
@@ -96,6 +101,11 @@ public class GameScene {
     private final List<Integer> spawnHistory = new ArrayList<>();
 
     private long lastFrameTime = 0;
+    private double timeScale = 1.0;
+    private double smoothedDelta = 1.0 / 60.0;
+    // World speed while the duck is crouching (this also happens for 0.25s after eating).
+    // 1.0 = no slowdown (smooth). Set to 0.75 to get the old "slow-mo crouch" back.
+    private static final double CROUCH_WORLD_SCALE = 1.0;
 
     // --- Spawn pacing rules ---
     private final boolean isLevel1;
@@ -202,7 +212,10 @@ public class GameScene {
         // ── Create the progress bar canvas ───────────────────────────────────
         // A transparent Canvas that sits on top of all game elements.
         // Mouse events pass through it so gameplay is unaffected.
-        progressCanvas = new Canvas(MainApp.WINDOW_WIDTH, MainApp.WINDOW_HEIGHT);
+        // Only the bottom strip is needed. A full-screen canvas re-uploads a 1280x720
+        // texture to the GPU every frame, which causes stutters.
+        progressCanvas = new Canvas(MainApp.WINDOW_WIDTH, PROGRESS_CANVAS_H);
+        progressCanvas.setLayoutY(MainApp.WINDOW_HEIGHT - PROGRESS_CANVAS_H);
         progressCanvas.setMouseTransparent(true);
         levelProgressBar = new LevelProgressBar(MainApp.WINDOW_WIDTH, MainApp.WINDOW_HEIGHT);
         levelProgressBar.setLevelLength(levelTotalScrollPixels); // refined in createBackground()
@@ -281,17 +294,21 @@ public class GameScene {
         background2.setFitHeight(MainApp.WINDOW_HEIGHT);
         background2.setPreserveRatio(true);
 
-        double width = bgImage.getWidth() * (MainApp.WINDOW_HEIGHT / bgImage.getHeight());
+        bgTileWidth = bgImage.getWidth() * (MainApp.WINDOW_HEIGHT / bgImage.getHeight());
+        bg1X = 0;
+        bg2X = bgTileWidth;
 
-        background1.setLayoutX(0);
-        background2.setLayoutX(width);
+        long r1 = Math.round(bg1X);
+        long tileW = Math.round(bgTileWidth);
+        background1.setLayoutX(r1);
+        background2.setLayoutX(r1 + tileW);
 
         // ── Compute the real level total length for the progress bar ─────────
         // The level triggers completion at bgScrolledTotal == loopsToComplete - 2
         // (see onTileWrapped). So the bar must be full exactly when that loop count
         // is reached — i.e. total scroll = (loopsToComplete - 2) * bgWidth.
         double normalLoops = Math.max(1.0, (loopsToComplete - 2));
-        levelTotalScrollPixels = normalLoops * width + width + MainApp.WINDOW_WIDTH;
+        levelTotalScrollPixels = normalLoops * bgTileWidth + bgTileWidth + MainApp.WINDOW_WIDTH;
         if (levelProgressBar != null) {
             levelProgressBar.setLevelLength(levelTotalScrollPixels);
         }
@@ -301,8 +318,39 @@ public class GameScene {
     private void updateBackground(double deltaTime) {
         double moveAmount = backgroundScrollSpeed * deltaTime;
 
-        background1.setLayoutX(background1.getLayoutX() - moveAmount);
-        background2.setLayoutX(background2.getLayoutX() - moveAmount);
+        bg1X -= moveAmount;
+        bg2X -= moveAmount;
+
+        // Seamless wrap: reposition tiles by full tile-pair widths to avoid gaps/jumps
+        while (bg1X <= -bgTileWidth) {
+            bg1X += bgTileWidth * 2;
+            bgScrolledTotal++;
+            onTileWrapped(background1);
+        }
+        while (bg2X <= -bgTileWidth) {
+            bg2X += bgTileWidth * 2;
+            bgScrolledTotal++;
+            onTileWrapped(background2);
+        }
+
+        // Keep tiles contiguous using float positions
+        if (bg1X < bg2X) {
+            bg2X = bg1X + bgTileWidth;
+        } else {
+            bg1X = bg2X + bgTileWidth;
+        }
+
+        long r1 = Math.round(bg1X);
+        long tileW = Math.round(bgTileWidth);
+        // Keep a stable on-screen gap between tiles to avoid 1px periodic jumps
+        if (bg1X < bg2X) {
+            background1.setLayoutX(r1);
+            background2.setLayoutX(r1 + tileW);
+        } else {
+            long r2 = Math.round(bg2X);
+            background2.setLayoutX(r2);
+            background1.setLayoutX(r2 + tileW);
+        }
 
         // ── Accumulate scroll distance for the progress bar ──────────────────
         if (!duckRunningOff) {
@@ -310,23 +358,11 @@ public class GameScene {
         }
         // ────────────────────────────────────────────────────────────────────
 
-        double width = background1.getBoundsInParent().getWidth();
-
-        if (background1.getLayoutX() <= -width) {
-            background1.setLayoutX(background2.getLayoutX() + width);
-            bgScrolledTotal++;
-            onTileWrapped(background1);
-        }
-        if (background2.getLayoutX() <= -width) {
-            background2.setLayoutX(background1.getLayoutX() + width);
-            bgScrolledTotal++;
-            onTileWrapped(background2);
-        }
-
         if (levelCompleted && !duckRunningOff) {
             ImageView transitionTile = (background1.getImage() == transitionImage)
                     ? background1 : background2;
-            double rightEdge = transitionTile.getLayoutX() + transitionTile.getBoundsInParent().getWidth();
+            double transitionX = (transitionTile == background1) ? bg1X : bg2X;
+            double rightEdge = transitionX + bgTileWidth;
             if (rightEdge <= MainApp.WINDOW_WIDTH) {
                 levelCompleted = false;
                 duckRunningOff = true;
@@ -348,6 +384,9 @@ public class GameScene {
     private void drawProgressBar() {
         GraphicsContext gc = progressCanvas.getGraphicsContext2D();
         gc.clearRect(0, 0, progressCanvas.getWidth(), progressCanvas.getHeight());
+        gc.save();
+        // LevelProgressBar draws in full-screen coordinates; shift into the small canvas.
+        gc.translate(0, -(MainApp.WINDOW_HEIGHT - PROGRESS_CANVAS_H));
 
         if (duckRunningOff) {
             // Run-off phase: mini duck has already reached the flag (bar = 1.0).
@@ -362,6 +401,7 @@ public class GameScene {
         }
 
         levelProgressBar.draw(gc);
+        gc.restore();
     }
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -452,6 +492,7 @@ public class GameScene {
             if (event.getCode() == KeyCode.ESCAPE) {
                 if (isPaused) resumeGame();
                 else pauseGame();
+                event.consume();
                 return;
             }
             if (isPaused) return;
@@ -662,13 +703,27 @@ public class GameScene {
         gameLoop = new AnimationTimer() {
             @Override
             public void handle(long now) {
+                edu.bauet.java.cse.duckrun.utils.FrameProfiler.begin(now);
+                try {
+                    handleFrame(now);
+                } finally {
+                    edu.bauet.java.cse.duckrun.utils.FrameProfiler.end();
+                }
+            }
+
+            private void handleFrame(long now) {
                 if (lastFrameTime == 0) {
                     lastFrameTime = now;
+                    smoothedDelta = 1.0 / 60.0;
                     return;
                 }
 
-                double deltaTime = (now - lastFrameTime) / 1_000_000_000.0;
+                double rawDelta = (now - lastFrameTime) / 1_000_000_000.0;
                 lastFrameTime = now;
+                // Prevent extreme hitch jumps without slowing normal gameplay
+                rawDelta = Math.min(rawDelta, 1.0 / 30.0);
+                smoothedDelta += (rawDelta - smoothedDelta) * 0.2; // smooth frame pacing (reduces visible speed jumps)
+                double deltaTime = smoothedDelta;
 
                 if (!isPaused) {
                     if (duckRunningOff) {
@@ -682,7 +737,10 @@ public class GameScene {
                     }
 
                     duck.setSleepy(!sleepBar.isEmpty());
-                    double effectiveDelta = duck.isCrouching() ? deltaTime * 0.75 : deltaTime;
+                    // Smoothly blend world speed when crouching instead of snapping (avoids sudden speed jump)
+                    double targetScale = duck.isCrouching() ? CROUCH_WORLD_SCALE : 1.0;
+                    timeScale += (targetScale - timeScale) * Math.min(1.0, deltaTime / 0.15);
+                    double effectiveDelta = deltaTime * timeScale;
                     updateBackground(effectiveDelta);
                     duck.update(deltaTime);
                     if (!levelCompleted) spawnEntities(now);
@@ -712,6 +770,7 @@ public class GameScene {
         timeUtil.stop();
         MediaPlayer bgm = MusicManager.getInstance().getBgPlayer();
         if (bgm != null && MusicManager.getInstance().isMusicEnabled()) bgm.pause();
+        edu.bauet.java.cse.duckrun.utils.FrameProfiler.reset();
         pauseMenu.setVisible(true, background1, background2);
         menuLayer.toFront();
         pauseMenu.getRoot().toFront();
@@ -722,6 +781,8 @@ public class GameScene {
         if (!isPaused) return;
         isPaused = false;
         lastFrameTime = 0;
+        smoothedDelta = 1.0 / 60.0;
+        edu.bauet.java.cse.duckrun.utils.FrameProfiler.reset();
         timeUtil.start();
         MediaPlayer bgm = MusicManager.getInstance().getBgPlayer();
         if (bgm != null && MusicManager.getInstance().isMusicEnabled()) bgm.play();
@@ -733,8 +794,13 @@ public class GameScene {
     private void restartGame() {
         resumeGame();
         duck.resetState();
-        background1.setLayoutX(0);
-        background2.setLayoutX(background1.getBoundsInLocal().getWidth());
+        bgScrollAccumulator = 0.0;
+        bg1X = 0.0;
+        bg2X = bgTileWidth;
+        long r1 = Math.round(bg1X);
+        long tileW = Math.round(bgTileWidth);
+        background1.setLayoutX(r1);
+        background2.setLayoutX(r1 + tileW);
 
         for (Enemy e : enemies) root.getChildren().remove(e.getNode());
         enemies.clear();

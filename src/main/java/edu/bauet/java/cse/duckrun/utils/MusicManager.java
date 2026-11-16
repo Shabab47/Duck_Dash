@@ -39,18 +39,38 @@ public class MusicManager {
         playSfx(resourcePath, 1.0); // default full volume
     }
 
+    // Decoding an mp3 inside AudioClip's constructor is slow and runs on the UI
+    // thread, so each clip is loaded once and reused for every later play().
+    private final java.util.Map<String, AudioClip> clipCache = new java.util.HashMap<>();
+
+    private AudioClip getClip(String resourcePath) {
+        AudioClip clip = clipCache.get(resourcePath);
+        if (clip == null) {
+            URL url = MusicManager.class.getResource(resourcePath);
+            if (url == null) {
+                System.err.println("MusicManager: SFX not found: " + resourcePath);
+                return null;
+            }
+            clip = new AudioClip(url.toExternalForm());
+            clipCache.put(resourcePath, clip);
+        }
+        return clip;
+    }
+
+    /** Call once at startup so the first footstep/hit doesn't stall a frame. */
+    public void preloadSfx(String... resourcePaths) {
+        for (String path : resourcePaths) {
+            try { getClip(path); } catch (Exception ignored) { }
+        }
+    }
+
     public void playSfx(String resourcePath, double volume) {
         if (!soundEnabled) return;
 
         try {
-            URL url = MusicManager.class.getResource(resourcePath);
-            if (url == null) {
-                System.err.println("MusicManager: SFX not found: " + resourcePath);
-                return;
-            }
-            AudioClip clip = new AudioClip(url.toExternalForm());
-            clip.setVolume(volume);
-            clip.play();
+            AudioClip clip = getClip(resourcePath);
+            if (clip == null) return;
+            clip.play(volume);
         } catch (Exception e) {
             System.err.println("MusicManager: could not play SFX: " + resourcePath);
             e.printStackTrace();

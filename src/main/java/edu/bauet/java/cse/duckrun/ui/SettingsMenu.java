@@ -6,6 +6,7 @@ import edu.bauet.java.cse.duckrun.utils.HighScoreManager;
 import edu.bauet.java.cse.duckrun.utils.MusicManager;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.geometry.Rectangle2D;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.image.Image;
@@ -13,10 +14,13 @@ import javafx.scene.image.ImageView;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.stage.Screen;
+import javafx.stage.Stage;
 
 public class SettingsMenu extends StackPane {
 
     private Button musicToggle;
+    private Button fullscreenToggle;
     private boolean isMusicOn = true;
     private Runnable onClose;
     private HighScoreMenu highScoreMenu;
@@ -65,7 +69,22 @@ public class SettingsMenu extends StackPane {
         musicToggle.setOnAction(e -> toggleMusic());
 
         musicBox.getChildren().addAll(musicLabel, musicToggle);
-        VBox.setMargin(musicBox, new Insets(80, 0, 0, 0));
+        VBox.setMargin(musicBox, new Insets(60, 0, 0, 0));
+
+        // Fullscreen Control
+        HBox fullscreenBox = new HBox(30);
+        fullscreenBox.setAlignment(Pos.CENTER);
+
+        Label fullscreenLabel = new Label("Fullscreen :");
+        fullscreenLabel.getStyleClass().add("settings-label");
+
+        fullscreenToggle = new Button();
+        fullscreenToggle.getStyleClass().addAll("music-toggle");
+        updateFullscreenToggleText();
+        fullscreenToggle.setOnAction(e -> toggleFullscreen());
+
+        fullscreenBox.getChildren().addAll(fullscreenLabel, fullscreenToggle);
+        VBox.setMargin(fullscreenBox, new Insets(10, 0, 0, 0));
 
         // Reset High Score
         Button resetHsButton = new Button("Reset High Score");
@@ -89,7 +108,7 @@ public class SettingsMenu extends StackPane {
         });
         VBox.setMargin(creditsButton, new Insets(0, 0, 0, 0));
 
-        contentLayout.getChildren().addAll(titleLabel, musicBox, resetHsButton, creditsButton);
+        contentLayout.getChildren().addAll(titleLabel, musicBox, fullscreenBox, resetHsButton, creditsButton);
 
         // Close Button
         Button closeButton = new Button("X");
@@ -113,5 +132,45 @@ public class SettingsMenu extends StackPane {
             musicToggle.setText("OFF");
         }
         MusicManager.getInstance().setMusicEnabled(isMusicOn);
+    }
+
+    private void toggleFullscreen() {
+        Stage stage = MainApp.getPrimaryStage();
+        if (stage == null) return;
+
+        if (stage.isFullScreen()) {
+            stage.setFullScreen(false);
+            stage.setResizable(true);
+
+            double targetWidth = MainApp.getLastWindowedWidth();
+            double targetHeight = MainApp.getLastWindowedHeight();
+            if (targetWidth <= 0 || targetHeight <= 0) {
+                targetWidth = 899;
+                targetHeight = 536;
+            }
+
+            stage.setWidth(targetWidth);
+            stage.setHeight(targetHeight);
+            stage.centerOnScreen();
+        } else {
+            MainApp.rememberWindowedSize();
+            stage.setFullScreenExitHint("");
+            stage.setFullScreenExitKeyCombination(javafx.scene.input.KeyCombination.NO_MATCH);
+            stage.setFullScreen(true);
+        }
+        updateFullscreenToggleText();
+    }
+
+    private void updateFullscreenToggleText() {
+        Stage stage = MainApp.getPrimaryStage();
+        boolean full = stage != null && stage.isFullScreen();
+        fullscreenToggle.getStyleClass().removeAll("music-on", "music-off");
+        if (full) {
+            fullscreenToggle.getStyleClass().add("music-on");
+            fullscreenToggle.setText("ON");
+        } else {
+            fullscreenToggle.getStyleClass().add("music-off");
+            fullscreenToggle.setText("OFF");
+        }
     }
 }
