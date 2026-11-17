@@ -17,6 +17,10 @@ public abstract class Obstacle {
     protected boolean active = true;
     protected boolean hasCollided = false;
 
+    // For render interpolation (visual only; simulation/collision uses current position)
+    protected double prevLayoutX = 0.0;
+    protected double currLayoutX = 0.0;
+
     public Obstacle(double startX,
                     double startY,
                     double worldSpeed,
@@ -37,18 +41,30 @@ public abstract class Obstacle {
 
         root.setLayoutX(startX);
         root.setLayoutY(startY);
+        prevLayoutX = startX;
+        currLayoutX = startX;
     }
 
     public void update(double deltaTime) {
         if (!active) return;
 
+        prevLayoutX = currLayoutX;
         double effectiveSpeed = speed * 60; // Convert speed to pixels per second
-        root.setLayoutX(root.getLayoutX() - effectiveSpeed * deltaTime);
+        currLayoutX = currLayoutX - effectiveSpeed * deltaTime;
+        root.setLayoutX(currLayoutX);
         updateHitbox();
 
-        if (root.getLayoutX() + view.getBoundsInParent().getWidth() < 0) {
+        if (currLayoutX + view.getBoundsInParent().getWidth() < 0) {
             active = false;
         }
+    }
+
+    /** Apply interpolated render position (visual only). Call after simulation steps each frame. */
+    public void renderInterpolated(double alpha) {
+        if (!active) return;
+        double x = prevLayoutX + (currLayoutX - prevLayoutX) * alpha;
+        root.setLayoutX(x);
+        updateHitbox();
     }
 
     private void updateHitbox() {

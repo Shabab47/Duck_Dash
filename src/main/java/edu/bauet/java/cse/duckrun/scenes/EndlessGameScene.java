@@ -25,7 +25,9 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import javafx.animation.AnimationTimer;
+import javafx.animation.PauseTransition;
 import javafx.scene.transform.Scale;
+import javafx.util.Duration;
 import javafx.geometry.Pos;
 import javafx.scene.Cursor;
 import javafx.scene.Scene;
@@ -107,6 +109,7 @@ public class EndlessGameScene {
 
     private long lastFrameTime = 0;
     private double accumulator = 0.0;
+    private double smoothDelta = 1.0 / 60.0;
     private static final double FIXED_DT = 1.0 / 60.0;
     private double timeScale = 1.0;
     // World speed while the duck is crouching (this also happens for 0.25s after eating).
@@ -371,12 +374,12 @@ public class EndlessGameScene {
             }
 
             private void handleFrame(long now) {
-                if (lastFrameTime == 0) { lastFrameTime = now; accumulator = 0.0; return; }
+                if (lastFrameTime == 0) { lastFrameTime = now; accumulator = 0.0; smoothDelta = FIXED_DT; return; }
                 double frameDelta = (now - lastFrameTime) / 1_000_000_000.0;
                 lastFrameTime = now;
-                // Prevent extreme hitch jumps without slowing normal gameplay
                 frameDelta = Math.min(frameDelta, 0.1);
-                accumulator += frameDelta;
+                smoothDelta += (frameDelta - smoothDelta) * 0.1;   // low-pass the timing jitter
+                accumulator += smoothDelta;
 
                 if (!isPaused) {
                     duck.setSleepy(!sleepBar.isEmpty());
@@ -404,12 +407,20 @@ public class EndlessGameScene {
                         }
                     }
 
+                    double alpha = Math.max(0.0, Math.min(1.0, accumulator / FIXED_DT));
                     renderBackgroundInterpolated();
+                    duck.renderInterpolated(alpha);
+                    for (Enemy enemy : enemies) enemy.renderInterpolated(alpha);
+                    for (Food food : foods) food.renderInterpolated(alpha);
+                    for (Obstacle obstacle : obstacles) obstacle.renderInterpolated(alpha);
                 }
             }
         };
-        startBgMusic();
         gameLoop.start();
+        // Defer music start slightly to avoid a first-frame hitch at round begin
+        PauseTransition musicDelay = new PauseTransition(Duration.millis(250));
+        musicDelay.setOnFinished(e -> startBgMusic());
+        musicDelay.play();
     }
 
     private void updateCountdown(double deltaTime) {
@@ -618,6 +629,7 @@ public class EndlessGameScene {
         isPaused = false;
         lastFrameTime = 0;
         accumulator = 0.0;
+        smoothDelta = FIXED_DT;
         edu.bauet.java.cse.duckrun.utils.FrameProfiler.reset();
         MediaPlayer bgm = MusicManager.getInstance().getBgPlayer();
         if (bgm != null && MusicManager.getInstance().isMusicEnabled()) bgm.play();

@@ -26,6 +26,7 @@ import java.util.Random;
 import java.util.stream.Collectors;
 
 import javafx.animation.AnimationTimer;
+import javafx.animation.PauseTransition;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.transform.Scale;
@@ -105,6 +106,7 @@ public class GameScene {
     private long lastFrameTime = 0;
     private double timeScale = 1.0;
     private double accumulator = 0.0;
+    private double smoothDelta = 1.0 / 60.0;
     private static final double FIXED_DT = 1.0 / 60.0;
     // World speed while the duck is crouching (this also happens for 0.25s after eating).
     // 1.0 = no slowdown (smooth). Set to 0.75 to get the old "slow-mo crouch" back.
@@ -722,20 +724,22 @@ public class GameScene {
                 if (lastFrameTime == 0) {
                     lastFrameTime = now;
                     accumulator = 0.0;
+                    smoothDelta = FIXED_DT;
                     return;
                 }
 
                 double frameDelta = (now - lastFrameTime) / 1_000_000_000.0;
                 lastFrameTime = now;
-                // Prevent extreme hitch jumps without slowing normal gameplay
                 frameDelta = Math.min(frameDelta, 0.1);
-                accumulator += frameDelta;
+                smoothDelta += (frameDelta - smoothDelta) * 0.1;   // low-pass the timing jitter
+                accumulator += smoothDelta;
 
                 if (!isPaused) {
                     if (duckRunningOff) {
                         duck.update(frameDelta);
                         background1.setLayoutX(bg1X);
                         background2.setLayoutX(bg2X);
+                        duck.renderInterpolated(1.0);
                         drawProgressBar();
                         if (duck.hasRunOff(MainApp.WINDOW_WIDTH)) {
                             duckRunningOff = false;
@@ -767,7 +771,12 @@ public class GameScene {
                         }
                     }
 
+                    double alpha = Math.max(0.0, Math.min(1.0, accumulator / FIXED_DT));
                     renderBackgroundInterpolated();
+                    duck.renderInterpolated(alpha);
+                    for (Enemy enemy : enemies) enemy.renderInterpolated(alpha);
+                    for (Food food : foods) food.renderInterpolated(alpha);
+                    for (Obstacle obstacle : obstacles) obstacle.renderInterpolated(alpha);
 
                     // ── Redraw progress bar every frame ──────────────────────
                     drawProgressBar();
@@ -776,8 +785,11 @@ public class GameScene {
             }
         };
         timeUtil.start();
-        startBgMusic();
         gameLoop.start();
+        // Defer music start slightly to avoid a first-frame hitch at round begin
+        PauseTransition musicDelay = new PauseTransition(Duration.millis(250));
+        musicDelay.setOnFinished(e -> startBgMusic());
+        musicDelay.play();
     }
 
     private void pauseGame() {
@@ -798,6 +810,7 @@ public class GameScene {
         isPaused = false;
         lastFrameTime = 0;
         accumulator = 0.0;
+        smoothDelta = FIXED_DT;
         edu.bauet.java.cse.duckrun.utils.FrameProfiler.reset();
         timeUtil.start();
         MediaPlayer bgm = MusicManager.getInstance().getBgPlayer();

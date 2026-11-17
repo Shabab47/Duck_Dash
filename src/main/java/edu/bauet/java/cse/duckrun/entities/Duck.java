@@ -106,7 +106,13 @@ public class Duck {
 
         duckGroup = new Group(duckShadow, duckView, debugHitbox);
         duckGroup.setLayoutX(x);
+        prevGroupLayoutX = x;
+        currGroupLayoutX = x;
     }
+
+    // For render interpolation (visual only)
+    private double prevGroupLayoutX = 0.0;
+    private double currGroupLayoutX = 0.0;
 
     // ------------------------------------------------------------------
     // Per-level speed configuration — call these right after construction
@@ -139,9 +145,11 @@ public class Duck {
     // ------------------------------------------------------------------
 
     public void update(double deltaTime) {
+        prevGroupLayoutX = currGroupLayoutX;
 
         if (runningOff) {
-            duckGroup.setLayoutX(duckGroup.getLayoutX() + RUN_OFF_SPEED * deltaTime);
+            currGroupLayoutX = currGroupLayoutX + RUN_OFF_SPEED * deltaTime;
+            duckGroup.setLayoutX(currGroupLayoutX);
             animate();
             return;
         }
@@ -190,7 +198,15 @@ public class Duck {
             }
         }
 
+        currGroupLayoutX = duckGroup.getLayoutX();
         animate();
+        updateDebugHitbox();
+    }
+
+    /** Apply interpolated render position for horizontal movement (visual only). */
+    public void renderInterpolated(double alpha) {
+        double x = prevGroupLayoutX + (currGroupLayoutX - prevGroupLayoutX) * alpha;
+        duckGroup.setLayoutX(x);
         updateDebugHitbox();
     }
 
@@ -331,6 +347,8 @@ public class Duck {
         crouching = false;
         jumpQueued = false;
         duckView.setLayoutY(groundLine - DISPLAY_HEIGHT);
+        prevGroupLayoutX = currGroupLayoutX;
+        currGroupLayoutX = currGroupLayoutX;
     }
 
     /** Returns true once the duck has fully exited the right edge. */
@@ -350,6 +368,8 @@ public class Duck {
         runningOff = false;
         jumpQueued = false;
         duckGroup.setLayoutX(200);
+        prevGroupLayoutX = 200;
+        currGroupLayoutX = 200;
         duckView.setLayoutY(groundLine - DISPLAY_HEIGHT);
         duckView.setEffect(null);
     }

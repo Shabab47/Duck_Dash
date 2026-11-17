@@ -25,6 +25,10 @@ public abstract class Enemy {
     protected boolean active = true;
     protected boolean hasCollided = false;
 
+    // For render interpolation (visual only; simulation/collision uses current position)
+    protected double prevLayoutX = 0.0;
+    protected double currLayoutX = 0.0;
+
     public Enemy(double startX,
                  double startY,
                  double worldSpeed,
@@ -48,19 +52,31 @@ public abstract class Enemy {
 
         root.setLayoutX(startX);
         root.setLayoutY(startY);
+        prevLayoutX = startX;
+        currLayoutX = startX;
     }
 
     public void update(double deltaTime) {
         if (!active) return;
 
+        prevLayoutX = currLayoutX;
         double effectiveSpeed = speed * 60;
-        root.setLayoutX(root.getLayoutX() - effectiveSpeed * deltaTime);
+        currLayoutX = currLayoutX - effectiveSpeed * deltaTime;
+        root.setLayoutX(currLayoutX);
         animate();
         updateDebugHitbox();
 
-        if (root.getLayoutX() + view.getBoundsInParent().getWidth() < 0) {
+        if (currLayoutX + view.getBoundsInParent().getWidth() < 0) {
             active = false;
         }
+    }
+
+    /** Apply interpolated render position (visual only). Call after simulation steps each frame. */
+    public void renderInterpolated(double alpha) {
+        if (!active) return;
+        double x = prevLayoutX + (currLayoutX - prevLayoutX) * alpha;
+        root.setLayoutX(x);
+        updateDebugHitbox();
     }
     
     private void updateDebugHitbox() {
